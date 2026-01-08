@@ -6,7 +6,7 @@ Author: Changchang Xu
 Maintainer: Changchang Xu <changchang.xu@alumni.utoronto.ca>
 Description: More about what it does (maybe more than one line)
     Use four spaces when indenting paragraphs within the Description.
-License: What license is it under?
+License: GPL-3
 Encoding: UTF-8
 LazyData: true
 Packaged: 2025-06-17 04:03:33 UTC; xucc8
@@ -16,3 +16,4 @@ Suggests:
     knitr
 VignetteBuilder: knitr
 RoxygenNote: 7.2.3
+
