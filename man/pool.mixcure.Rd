@@ -34,8 +34,7 @@ An object of class mipo, which stands for 'multiple imputation pooled outcome'.
 }
 \references{
 Rubin, D.B. (1987). Multiple Imputation for Nonresponse in Surveys. New York: John Wiley and Sons.
-
-(submitted) Xu C, Briollais L, Andrulis I, Bull SB.Inference for multiple imputation with penalized maximum likelihood under the mixture cure model. Statistical Methods in Medical Research.
+Xu C, Briollais L, Andrulis I, Bull S. Accommodating the Analysis Model in Multiple Imputation for the Weibull Mixture Cure Model: Performance under Penalized Likelihood. 2025.  arXiv:2507.16690
 }
 \author{
 Changchang Xu
@@ -85,3 +84,4 @@ out.RR.mod.penal <- pool.mixcure(obj=mixcure.all20.penal)
 % \concept{ ~cpt1 }
 % \concept{ ~cpt2 }
 % Use only one concept per line.
+
