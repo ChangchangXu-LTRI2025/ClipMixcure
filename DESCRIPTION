@@ -4,8 +4,7 @@ Title: Combined likelihood profile inference for multiply imputed data under mix
 Version: 1.1.0
 Author: Changchang Xu
 Maintainer: Changchang Xu <changchang.xu@alumni.utoronto.ca>
-Description: More about what it does (maybe more than one line)
-    Use four spaces when indenting paragraphs within the Description.
+Description: This package provides mixture cure modelling for multiply imputed data from 'mice' and computes the combined likelihood profile confidence intervals and tests for the parameters with estimation under Firth-type penalized likelihood or maximum likelihood.
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
@@ -15,5 +14,5 @@ Suggests:
     rmarkdown,
     knitr
 VignetteBuilder: knitr
-RoxygenNote: 7.2.3
+RoxygenNote: 7.3.3
 
