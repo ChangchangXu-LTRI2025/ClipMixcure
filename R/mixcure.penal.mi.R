@@ -34,99 +34,78 @@ require(R.utils)
   ## penalized mixture cure loglikelihood functions ##
   ####################################################
 
-  loglik.mixture <- function(p, survt, design.matrix, index.cure.var=index.cure.v, index.surv.var=index.surv.v, pl) {
+  loglik.mixture <- function(p, survt, design.matrix, index.cure.var=index.cure.v, index.surv.var=index.surv.v, pl, PLCI=F) {
 
-   ####  parameter and variable dep parameters;
-   #####
-    theta = 1/(1+exp(-design.matrix%*%p[index.cure.var]))
-    eps = survt[,1]^(p[index.gamma])*exp(design.matrix%*%p[index.surv.var])
-    eta = 1/((exp(eps)-1)*theta+1)
-    delta = 1/(theta/(1-theta)*exp(eps)+1)
-    kap = theta*(1-theta)*(1-eta)+(1-theta)^2*eta*(1-eta)  # for est and PLCI
-   # kap= (1-eta)*(1-theta)*(theta + eta)    # exp for est and PLCI
-     pi = exp(eps)*eps*eta^2
-    # lambda = (1-theta)^2*eta*(1-eta)*((2*eta-1)*(1-theta)+3)
-    # phi = theta*(1-theta)*((2*eta-1)*(1-theta)+theta)*pi
+    ####  parameter and variable dep parameters;
+    t <- survt[, 1];  status <- survt[, 2];  event <- (status == 1L);  cens  <- !event;  logt  <- log(t)
+    # Sub-matrices for the two linear predictors
+    Xc <- design.matrix[, index.cure.var, drop = FALSE]
+    k.vec <- ncol(Xc)                       # number of covariates in each part
+    Xs <- design.matrix[, (index.surv.var - k.vec), drop = FALSE]
+    index.gamma <- 2 * k.vec + 1            # matches parameter layout
+    gamma <- p[index.gamma]
 
-    #calculate loglikelihood for the unpenalized;
-    cure.par <- p[1 : ncol(design.matrix) ];
-    surv.par <- p[ (ncol(design.matrix) + 1) : (2*length(cure.par)) ];
-    p.gamma <- p[ 2*length(cure.par) + 1 ];  #use original shape parameter instead of exp();
+    # Guard (optional but helps nlm avoid NaNs)
+    if (!is.finite(gamma) || gamma <= 0) return(Inf)
 
-    # loglikelihood is defined as the negative of the actual loglikelihood for feeding nlm() minimizer;
-    loglikelihood <- -sum( ( log(1-theta) + log(p.gamma)-log(survt[,1])
-                             +log(eps)-eps )[survt[, 2] == 1] ) -
-      sum( (log(theta + (1-theta)*exp(-eps)))[survt[, 2] == 0] );
+    # Cure part: theta
+    lp_cure <- drop(Xc %*% p[index.cure.var])
+    theta <- plogis(lp_cure)
+    # Survival part: eps = t^gamma * exp(Xs beta) = exp(gamma*logt + Xs beta)
+    lp_surv <- drop(Xs %*% p[index.surv.var])
+    logeps <- gamma * logt + lp_surv
+    eps <- exp(logeps)
+    # Common denominator: D = theta + (1-theta)*exp(-eps)
+    emeps <- exp(-eps)
+    D <- theta + (1 - theta) * emeps
 
- if (pl==F)    {
-   loglik = loglikelihood
- } else {
-  ####calculate inverse of info matrix by block matrix;
+    # Negative log-likelihood
+    # event term: log(1-theta) + log(gamma) - log(t) + log(eps) - eps
+    event_term <- log1p(-theta) + log(gamma) - logt + logeps - eps
+    loglikelihood <- -sum(event_term[event]) - sum(log(D[cens]))
 
-    n.elema = length(index.cure.var)^2
-    a.sub1 <- matrix(rep(0,n.elema), nrow = length(index.cure.var))
-    a.sub2 <- matrix(rep(0,n.elema), nrow = length(index.cure.var))
+    if (!pl) return(loglikelihood)
 
-     for (i in c(index.cure.var)) {
-      for (j in c(index.cure.var)) {
-        a.sub1[i,j] <- sum((design.matrix[,i]*design.matrix[,j]*theta*(1-theta))[survt[, 2] == 1])
-        a.sub2[i,j] <- sum((design.matrix[,i]*design.matrix[,j]*kap)[survt[, 2] == 0])
-        }
-    }
-    info.a = a.sub1 + a.sub2
+    # Quantities for penalty
+    eta   <- emeps / D
+    delta <- (1 - theta) * eta
+    kap   <- (1 - eta) * (1 - theta) * (theta + eta)
+    pi    <- eps * emeps / (D * D)      # equals exp(eps)*eps*eta^2 but overflow-safe
+    # Build Xt once: survival covariates + log(t) for gamma column
+    Xt <- cbind(Xs, logt)
+    # Convert event/cens to 0/1 for weighting without subsetting
+    e <- as.numeric(event)
+    c <- 1 - e
 
-    design.xt <- cbind(design.matrix, log(survt[,1]))
-    n.elemb <- length(index.cure.var)*(length(index.cure.var)+1)
-    b.sub <- matrix(rep(0,n.elemb), nrow = length(index.surv.var))
+    # --- Block A (k x k): for cure by cure parameters
+    w1 <- theta * (1 - theta)
+    wA <- e * w1 + c * kap
+    info.a <- crossprod(Xc, Xc * wA)
 
-    for (i in c(index.cure.var)) {
-      for (j in c(index.cure.var,length(index.surv.var)+1)) {
-        #b.sub[i,j] <- -sum((design.matrix[,i]*design.xt[,j]*theta*(1-theta)*pi)[survt[, 2] == 0]) #for est
-        #b.sub[i,j] <- -sum((design.matrix[,i]*design.xt[,j]*eps*(1-eta)*eta*(1-theta))[survt[, 2] == 0])  #for LRT
-        b.sub[i,j] <- -sum((design.matrix[,i]*design.xt[,j]*eps*(1-delta)*delta)[survt[, 2] == 0]) #alternative expression for est
+    # --- Block B (k x (k+1)): for cure by surv parameters, only censored contribute
+    wB <- c * (w1 * pi)
+    info.b <- -crossprod(Xc, Xt * wB)
 
-              }
-    }
-    info.b = b.sub  #Upper right block of fisher.info;
+    # --- Block D ((k+1) x (k+1)): for surv by surv parameters
+    wd2 <- eps * delta - eps^2 * delta + eps^2 * delta^2
+    wD <- e * eps + c * wd2
+    info.d <- crossprod(Xt, Xt * wD)
 
+    # Add your extra gamma-gamma term
+    info.d[k.vec + 1, k.vec + 1] <- info.d[k.vec + 1, k.vec + 1] + sum(event) / (gamma * gamma)
 
-    n.elemd <- (length(index.surv.var)+1)^2
-    d.sub1 <- matrix(rep(0,n.elemd), nrow = (length(index.surv.var)+1))
-    d.sub2 <- matrix(rep(0,n.elemd), nrow = (length(index.surv.var)+1))
+    # Schur complement without explicit inverse:
+    # S = A - B %*% D^{-1} %*% t(B)
+    tmp <- solve(info.d, t(info.b))     # (k+1) x k
+    S <- info.a - info.b %*% tmp
 
-    for (i in c(index.cure.var,length(index.surv.var)+1)) {
-      for (j in c(index.cure.var,length(index.surv.var)+1)) {
-        d.sub1[i,j] <- sum((design.xt[,i]*design.xt[,j]*eps)[survt[, 2] == 1])
-        #d.sub2[i,j] <- sum((design.xt[,i]*design.xt[,j]*(eps*delta^2))[survt[, 2] == 0]) #for est, PLCI
-        #d.sub2[i,j] <- sum((design.xt[,i]*design.xt[,j]*(eps*delta-eps^2*(delta*(1-delta))))[survt[, 2] == 0]) #for LRT, same as below
-        d.sub2[i,j] <- sum((design.xt[,i]*design.xt[,j]*(eps*delta-eps^2*delta+eps^2*delta^2))[survt[, 2] == 0]) #for est, PLCI
+    # log|det| in a stable way
+    detS <- determinant(S, logarithm = TRUE)
+    detD <- determinant(info.d, logarithm = TRUE)
 
-        }
-    }
-    info.d = d.sub1 + d.sub2 +
-           matrix(c(rep(0, (n.elemd-1)),sum(survt[, 2] == 1)/(p[index.gamma]^2)),nrow = (length(index.surv.var)+1))
-
-
-    info.d.inv = mat.inv(info.d)
-
-#    fisher.info = rbind(cbind(info.a,info.b),cbind(t(info.b),info.d))
-    #hessian.mat = -fisher.info
-
-    # #info.set0 is (A-BD^-1B^T), dif than used in modified score;
-   info.set0 = info.a-info.b%*%info.d.inv%*%t(info.b)
-
-        #determinant of hessian matrix;
-    det.info = det(info.set0)*det(info.d)
- #   det.info = matrix.det(fisher.info)
-
-
-      loglik = loglikelihood - 0.5*log(det.info)
-
- }
-
-    #loglik = loglikelihood
-    return(loglik)
-
+    if (!PLCI) {if (detS$sign * detD$sign <= 0) return(Inf)}
+    logdet <- as.numeric(detS$modulus) + as.numeric(detD$modulus)
+    loglikelihood - 0.5 * logdet
   }
 
   ######END of loglik.mixture####################################
