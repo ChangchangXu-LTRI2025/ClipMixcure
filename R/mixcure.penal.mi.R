@@ -5,6 +5,11 @@
 #### Last modified Dec31 2018 for 3 or more x variables ##
 ##########################################################
 
+#' Fit a Weibull PH mixture cure model (penalized or unpenalized likelihood)
+#'
+#' @noRd
+#' @export
+#'
 mixcure.penal.mi <- function(formula, data, init, pl, iterlim = 200) {
 require(splines)
 require(survival)

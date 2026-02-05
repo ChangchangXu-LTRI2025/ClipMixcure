@@ -1,4 +1,8 @@
 
+#' Pool multiply-imputed mixture cure model results
+#'
+#' @noRd
+#' @export
 pool.mixcure<-function (object)
 {
   require(mice)

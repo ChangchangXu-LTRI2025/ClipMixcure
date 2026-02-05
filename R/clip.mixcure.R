@@ -8,6 +8,13 @@
 
 ##feed mira object to obj, and specify TRUE or FALSE for pl;
 
+#' Generate CLIP bounds for multiply-imputed mixture cure model fits
+#'
+#' This is a legacy entry point used internally by the ClipMixcure engine.
+#' The meta-layer uses \code{clipmixcure_fit()} as the stable front-end.
+#'
+#' @noRd
+#' @export
 clip.mixcure <- function (obj = NULL, variable = NULL, pl =F , ci.level = c(0.025, 0.975),
                            pvalue = TRUE, bound.lo = NULL, bound.up = NULL, iternum=20) {
 

@@ -7,7 +7,10 @@
 # data = big.data[imputation.indicator == zz,];
 # beta = beta[zz, ]; loglik = loglik[zz]; pos = pos; pl = F; b = z;
 
-
+#' Compute PDF/CDF pieces used by the clipped-likelihood algorithm
+#'
+#' @noRd
+#' @export
 mixcure.clip.pdf <- function (formula, data, pl, iterlim = 200, pos, b, beta = NULL, loglik = NULL)
 {
   require(splines)
