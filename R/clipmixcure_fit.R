@@ -27,8 +27,12 @@ clipmixcure_fit <- function(spec, control = list()) {
         stop("clipmixcure_fit(): package 'mice' is required for mids objects.", call. = FALSE)
       }
       return(with(
-        data = dat,
-        expr = ClipMixcure::mixcure.penal.mi(fml, init = init, pl = pl)
+        data = dat,  # mids
+        expr = local({
+          fml2 <- fml
+          environment(fml2) <- environment()  # <-- critical line
+          ClipMixcure::mixcure.penal.mi(fml2, init = init, pl = pl)
+        })
       ))
     }
 
