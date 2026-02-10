@@ -26,7 +26,7 @@ clipmixcure_fit <- function(spec, control = list()) {
       if (!requireNamespace("mice", quietly = TRUE)) {
         stop("clipmixcure_fit(): package 'mice' is required for mids objects.", call. = FALSE)
       }
-      return(mice::with(
+      return(with(
         data = dat,
         expr = ClipMixcure::mixcure.penal.mi(fml, init = init, pl = pl)
       ))
