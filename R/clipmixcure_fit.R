@@ -1,14 +1,9 @@
-#' Adapter for mixcuref.meta: fit from a mc_spec
-#'
-#' @param spec A mc_spec object
-#' @param control Engine-specific options
-#' @return An engine-specific fitted object
 #' @export
 clipmixcure_fit <- function(spec, control = list()) {
 
-  method <- control$method %||% "penal_mi"
+  method <- control$method
+  if (is.null(method)) method <- "penal_mi"
 
-  # For ClipMixcure MI workflow we require a Surv(...) ~ ... formula in control
   fml <- control$formula
   if (is.null(fml) || !inherits(fml, "formula")) {
     stop("clipmixcure_fit(): control$formula must be a formula like Surv(Time, CENS==1) ~ ...",
@@ -18,27 +13,29 @@ clipmixcure_fit <- function(spec, control = list()) {
   init <- control$init
   pl   <- isTRUE(control$pl)
 
-  dat <- spec$data
+  dat <- spec$data  # <-- DO NOT CHANGE THIS LINE
 
   if (identical(method, "penal_mi")) {
-    # 1) Multiple imputation case: mids -> mice::with(...)
+
+    # DEBUG (leave these in until it runs once)
+    message("DEBUG: class(dat) = ", paste(class(dat), collapse = ", "))
+    message("DEBUG: inherits(dat,'mids') = ", inherits(dat, "mids"))
+    message("DEBUG: is.data.frame(dat) = ", is.data.frame(dat))
+
     if (inherits(dat, "mids")) {
       if (!requireNamespace("mice", quietly = TRUE)) {
         stop("clipmixcure_fit(): package 'mice' is required for mids objects.", call. = FALSE)
       }
-      res <- with(
-        data = dat,  # mids
+      return(with(
+        data = dat,
         expr = local({
           fml2 <- fml
-          environment(fml2) <- environment()  # <-- critical line
+          environment(fml2) <- environment()
           ClipMixcure::mixcure.penal.mi(fml2, init = init, pl = pl)
         })
-      )
-      res$.mids_data <- spec$data   # attach a copy safely
-      res
+      ))
     }
 
-    # 2) Standard data.frame case
     if (is.data.frame(dat)) {
       return(ClipMixcure::mixcure.penal.mi(fml, init = init, pl = pl))
     }
@@ -47,14 +44,5 @@ clipmixcure_fit <- function(spec, control = list()) {
          call. = FALSE)
   }
 
-  if (identical(method, "clip")) {
-    # This assumes clip.mixcure() expects an MI-fit object (like your example)
-    # So method='clip' should generally be called on a previous MI fit, not directly here.
-    stop("clipmixcure_fit(): method='clip' is a post-fit step. Fit with method='penal_mi' first, then call clip.mixcure().",
-         call. = FALSE)
-  }
-
   stop("clipmixcure_fit(): unknown control$method = ", method, call. = FALSE)
 }
-
-`%||%` <- function(x, y) if (is.null(x)) y else x
