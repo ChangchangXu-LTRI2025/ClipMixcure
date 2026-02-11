@@ -26,14 +26,16 @@ clipmixcure_fit <- function(spec, control = list()) {
       if (!requireNamespace("mice", quietly = TRUE)) {
         stop("clipmixcure_fit(): package 'mice' is required for mids objects.", call. = FALSE)
       }
-      return(with(
+      res <- with(
         data = dat,  # mids
         expr = local({
           fml2 <- fml
           environment(fml2) <- environment()  # <-- critical line
           ClipMixcure::mixcure.penal.mi(fml2, init = init, pl = pl)
         })
-      ))
+      )
+      res$.mids_data <- spec$data   # attach a copy safely
+      res
     }
 
     # 2) Standard data.frame case

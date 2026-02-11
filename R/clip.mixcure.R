@@ -18,7 +18,12 @@
 clip.mixcure <- function (obj = NULL, variable = NULL, pl =F , ci.level = c(0.025, 0.975),
                            pvalue = TRUE, bound.lo = NULL, bound.up = NULL, iternum=20) {
 
-  data.imp <- eval(obj$call$data)
+#  data.imp <- eval(obj$call$data)
+  if (!is.null(obj$.mids_data) && inherits(obj$.mids_data, "mids")) {
+    data.imp <- obj$.mids_data
+  } else {
+    data.imp <- eval(obj$call$data, envir = parent.frame())
+  }
   nimp <- data.imp$m
   data <- lapply(1:nimp, function(x) complete(data.imp,
                                               action = x))
