@@ -13,11 +13,10 @@ clipmixcure_fit <- function(spec, control = list()) {
   init <- control$init
   pl   <- isTRUE(control$pl)
 
-  dat <- spec$data  # <-- DO NOT CHANGE THIS LINE
+  dat <- spec$data
 
   if (identical(method, "penal_mi")) {
 
-    # DEBUG (leave these in until it runs once)
     message("DEBUG: class(dat) = ", paste(class(dat), collapse = ", "))
     message("DEBUG: inherits(dat,'mids') = ", inherits(dat, "mids"))
     message("DEBUG: is.data.frame(dat) = ", is.data.frame(dat))
@@ -26,14 +25,21 @@ clipmixcure_fit <- function(spec, control = list()) {
       if (!requireNamespace("mice", quietly = TRUE)) {
         stop("clipmixcure_fit(): package 'mice' is required for mids objects.", call. = FALSE)
       }
-      return(with(
+
+      res <- with(
         data = dat,
         expr = local({
           fml2 <- fml
           environment(fml2) <- environment()
           ClipMixcure::mixcure.penal.mi(fml2, init = init, pl = pl)
         })
-      ))
+      )
+
+      # Attach mids object so downstream functions (e.g., clip.mixcure)
+      # don't need eval(obj$call$data) to work.
+      attr(res, "mids_data") <- dat
+
+      return(res)
     }
 
     if (is.data.frame(dat)) {
