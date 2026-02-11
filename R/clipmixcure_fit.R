@@ -17,10 +17,6 @@ clipmixcure_fit <- function(spec, control = list()) {
 
   if (identical(method, "penal_mi")) {
 
-    message("DEBUG: class(dat) = ", paste(class(dat), collapse = ", "))
-    message("DEBUG: inherits(dat,'mids') = ", inherits(dat, "mids"))
-    message("DEBUG: is.data.frame(dat) = ", is.data.frame(dat))
-
     if (inherits(dat, "mids")) {
       if (!requireNamespace("mice", quietly = TRUE)) {
         stop("clipmixcure_fit(): package 'mice' is required for mids objects.", call. = FALSE)
@@ -35,9 +31,9 @@ clipmixcure_fit <- function(spec, control = list()) {
         })
       )
 
-      # Attach mids object so downstream functions (e.g., clip.mixcure)
-      # don't need eval(obj$call$data) to work.
+      ## KEY: make object self-contained for downstream clip.mixcure()
       attr(res, "mids_data") <- dat
+      attr(res, "model_formula") <- fml
 
       return(res)
     }

@@ -18,31 +18,49 @@
 clip.mixcure <- function (obj = NULL, variable = NULL, pl =F , ci.level = c(0.025, 0.975),
                            pvalue = TRUE, bound.lo = NULL, bound.up = NULL, iternum=20) {
 
-  ## Prefer mids object attached by clipmixcure_fit()
+  if (!requireNamespace("mice", quietly = TRUE)) {
+    stop("clip.mixcure(): package 'mice' is required.", call. = FALSE)
+  }
+
+  ## 1) Recover mids object robustly (no eval of local symbols like 'dat')
   data.imp <- attr(obj, "mids_data", exact = TRUE)
 
-  ## Legacy fallback: object created in user's global environment
   if (!inherits(data.imp, "mids")) {
-    data.imp <- eval(obj$call$data, envir = parent.frame())
+    ## legacy fallback for objects created in the user's workspace
+    data.imp <- tryCatch(
+      eval(obj$call$data, envir = parent.frame()),
+      error = function(e) NULL
+    )
   }
 
   if (!inherits(data.imp, "mids")) {
     stop("clip.mixcure(): could not recover a 'mids' object. ",
-         "Provide a mira object created by with(mids, ...) or attach it via attr(obj,'mids_data').",
+         "Fit must carry the mids object via attr(obj,'mids_data').",
          call. = FALSE)
   }
 
-  ## Robust number of imputations
+  ## 2) Number of imputations (robust)
   nimp <- data.imp$m
   if (is.null(nimp) || length(nimp) == 0L) {
     nimp <- length(obj$analyses)
   }
 
-  ## Use mice::complete explicitly
   data <- lapply(seq_len(nimp), function(x) mice::complete(data.imp, action = x))
 
   fits <- obj$analyses
-  formula <- as.formula(obj$call$expr[[2]])
+
+  ## 3) Recover formula robustly (do NOT parse obj$call$expr; it contains local 'fml')
+  formula <- attr(obj, "model_formula", exact = TRUE)
+  if (!inherits(formula, "formula")) {
+    formula <- tryCatch(stats::formula(fits[[1]]), error = function(e) NULL)
+  }
+  if (!inherits(formula, "formula") && !is.null(fits[[1]]$call$formula)) {
+    formula <- fits[[1]]$call$formula
+  }
+  if (!inherits(formula, "formula")) {
+    stop("clip.mixcure(): could not recover model formula.", call. = FALSE)
+  }
+
 
   if (is.null(variable))
     variable <- fits[[1]]$terms
