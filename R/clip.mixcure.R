@@ -18,15 +18,29 @@
 clip.mixcure <- function (obj = NULL, variable = NULL, pl =F , ci.level = c(0.025, 0.975),
                            pvalue = TRUE, bound.lo = NULL, bound.up = NULL, iternum=20) {
 
-#  data.imp <- eval(obj$call$data)
-  if (!is.null(obj$.mids_data) && inherits(obj$.mids_data, "mids")) {
-    data.imp <- obj$.mids_data
-  } else {
+  ## Prefer mids object attached by clipmixcure_fit()
+  data.imp <- attr(obj, "mids_data", exact = TRUE)
+
+  ## Legacy fallback: object created in user's global environment
+  if (!inherits(data.imp, "mids")) {
     data.imp <- eval(obj$call$data, envir = parent.frame())
   }
+
+  if (!inherits(data.imp, "mids")) {
+    stop("clip.mixcure(): could not recover a 'mids' object. ",
+         "Provide a mira object created by with(mids, ...) or attach it via attr(obj,'mids_data').",
+         call. = FALSE)
+  }
+
+  ## Robust number of imputations
   nimp <- data.imp$m
-  data <- lapply(1:nimp, function(x) complete(data.imp,
-                                              action = x))
+  if (is.null(nimp) || length(nimp) == 0L) {
+    nimp <- length(obj$analyses)
+  }
+
+  ## Use mice::complete explicitly
+  data <- lapply(seq_len(nimp), function(x) mice::complete(data.imp, action = x))
+
   fits <- obj$analyses
   formula <- as.formula(obj$call$expr[[2]])
 
