@@ -1,0 +1,176 @@
+---
+title: "ClipMixcure Manual"
+author: "Changchang Xu"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    toc: true
+    number_sections: true
+vignette: >
+  %\VignetteIndexEntry{ClipMixcure Manual}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  eval = FALSE,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE
+)
+```
+
+# Overview
+
+`ClipMixcure` supports multiply-imputed Weibull mixture cure modeling and combined likelihood profile (CLIP) inference. It is designed for settings where Rubin-style normal approximations may be unreliable and profile-based inference is preferred.
+
+The main functions are:
+
+- `mixcure.penal.mi()` for fitting mixture cure models across imputations
+- `clip.mixcure()` for CLIP confidence intervals and p-values
+- `pool.mixcure()` for Rubin-style pooled summaries
+- `mixcure.clip.pdf()` for profile-density calculations used by CLIP
+- `clipmixcure_fit()` as the adapter used by `Mixcuref.Meta`
+
+# Package data
+
+The package includes one multiply-imputation example dataset:
+
+- `ANNbcBMdat5_miss`
+
+This dataset contains missing values and is intended for use with `mice`.
+
+# Multiple imputation workflow
+
+```{r}
+library(ClipMixcure)
+library(mice)
+library(survival)
+
+data(ANNbcBMdat5_miss)
+
+imp20 <- mice(ANNbcBMdat5_miss, m = 20, maxit = 20, seed = 24415, print = FALSE)
+data20 <- complete(imp20, action = "long", include = TRUE)
+
+data20$TN <- factor(with(data20,
+  ifelse((Her2 == "1" & ER == 2 & PR == 2), "2", "1")
+))
+
+data20$LuminalA <- factor(with(data20,
+  ifelse((Her2 == "1" & (ER == 1 | PR == 1) & KI67 == 1), "2", "1")
+))
+
+data20$LuminalB <- factor(with(data20,
+  ifelse((Her2 == "1" & (ER == 1 | PR == 1) & KI67 == 2), "2", "1")
+))
+
+imp20sub <- as.mids(data20)
+```
+
+# Fitting across imputations
+
+```{r}
+mixcure_all20 <- with(
+  data = imp20sub,
+  expr = mixcure.penal.mi(
+    Surv(Time, CENS == 1) ~ Her2 + LuminalA + TN + MENS0 + TUMCT,
+    init = c(2, rep(0.1, 5), -10, rep(0.1, 5), 1),
+    pl = FALSE
+  )
+)
+
+class(mixcure_all20)
+length(mixcure_all20$analyses)
+```
+
+# CLIP inference
+
+```{r}
+out_clip <- clip.mixcure(
+  obj = mixcure_all20,
+  pl = FALSE
+)
+
+out_clip
+```
+
+Firth-type penalized estimation can be requested by setting `pl = TRUE` in both the fitting and CLIP steps.
+
+```{r}
+mixcure_all20_penal <- with(
+  data = imp20sub,
+  expr = mixcure.penal.mi(
+    Surv(Time, CENS == 1) ~ Her2 + LuminalA + TN + MENS0 + TUMCT,
+    init = c(2, rep(0.1, 5), -10, rep(0.1, 5), 1),
+    pl = TRUE
+  )
+)
+
+out_clip_penal <- clip.mixcure(
+  obj = mixcure_all20_penal,
+  pl = TRUE
+)
+```
+
+# Rubin-style pooling
+
+```{r}
+pooled <- pool.mixcure(mixcure_all20)
+pooled
+```
+
+# Meta-layer adapter
+
+The `clipmixcure_fit()` adapter is used by `Mixcuref.Meta` to route engine-specific requests. It accepts an `mc_spec` object and engine-specific control arguments.
+
+```{r}
+# spec is a model specification object created by Mixcuref.Meta
+# fit <- clipmixcure_fit(spec, control = list(
+#   method = "penal_mi",
+#   formula = Surv(Time, CENS == 1) ~ Her2 + LuminalA + TN + MENS0 + TUMCT,
+#   init = c(2, rep(0.1, 5), -10, rep(0.1, 5), 1),
+#   pl = FALSE
+# ))
+```
+
+# Notes
+
+- `mixcure.penal.mi()` is intended to be used inside `with(mids, ...)`.
+- `clip.mixcure()` consumes the resulting `mira` object.
+- CLIP intervals are especially useful when normal approximations are questionable.
+- Derived subtype variables such as `TN` and `LuminalA` should be created before converting back to a `mids` object with `as.mids()`.
+
+# Session information
+
+```{r, eval=T, echo=F}
+pkgs <- c(
+#  "ClipMixcure",
+  "mice",
+  "survival",
+  "splines",
+  "abind",
+  "R.utils"
+)
+
+desc_field <- function(pkg, field) {
+  x <- tryCatch(utils::packageDescription(pkg, fields = field), error = function(e) NA)
+  if (is.null(x) || is.na(x)) "" else x
+}
+
+pkg_table <- data.frame(
+  Package = pkgs,
+  Version = sapply(pkgs, function(x) as.character(packageVersion(x))),
+  Built   = sapply(pkgs, desc_field, field = "Built"),
+  Remote  = sapply(pkgs, desc_field, field = "RemoteSha"),
+  row.names = NULL,
+  stringsAsFactors = FALSE
+)
+
+knitr::kable(pkg_table, caption = "Package Versions")
+
+cat("\n\n")
+
+#sessionInfo()
+
+```
